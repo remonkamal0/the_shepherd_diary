@@ -1,6 +1,8 @@
 package com.example.the_shepherd_diary
 
 import android.graphics.BitmapFactory
+import android.content.Intent
+import android.provider.CalendarContract
 import com.googlecode.tesseract.android.TessBaseAPI
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -10,6 +12,30 @@ import java.io.File
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
+        MethodChannel(engine.dartExecutor.binaryMessenger, "shepherd/calendar")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "addEvent") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                val start = call.argument<Number>("start")?.toLong()
+                val end = call.argument<Number>("end")?.toLong()
+                if (start == null || end == null) {
+                    result.error("date", "Missing event dates", null)
+                    return@setMethodCallHandler
+                }
+                val intent = Intent(Intent.ACTION_INSERT, CalendarContract.Events.CONTENT_URI)
+                    .putExtra(CalendarContract.Events.TITLE, call.argument<String>("title"))
+                    .putExtra(CalendarContract.Events.EVENT_LOCATION, call.argument<String>("location"))
+                    .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, start)
+                    .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, end)
+                try {
+                    startActivity(intent)
+                    result.success(null)
+                } catch (error: android.content.ActivityNotFoundException) {
+                    result.error("calendar", "No calendar app available", null)
+                }
+            }
         MethodChannel(engine.dartExecutor.binaryMessenger, "shepherd/liturgy_ocr")
             .setMethodCallHandler { call, result ->
                 val bytes = call.arguments as? ByteArray
@@ -99,4 +125,5 @@ class MainActivity : FlutterActivity() {
         return lines
     }
 }
+
 

@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+<key>NSCameraUsageDescription</key>
+<string>يستخدم التطبيق الكاميرا لتصوير جدول القداسات.</string>
+<key>NSCalendarsUsageDescription</key>
+<string>يسمح التطبيق بإضافة القداسات إلى تقويم جهازك.</string>
 </dict>
 </plist>
+
+

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import '../../../domain/appointments/liturgy_schedule.dart';
 import 'priest_liturgy_image_review.dart';
 import 'priest_service_inbox.dart';
@@ -115,7 +117,71 @@ class _PriestServicesState extends State<PriestServices> {
     if (result == null || !mounted) return false;
     final previous = List<Appointment>.of(_appointments);
     setState(() => _save(result));
-    return _persist(previous);
+    final saved = await _persist(previous);
+    if (saved &&
+        mounted &&
+        initial == null &&
+        result.service == Service.liturgy &&
+        result.when.isAfter(DateTime.now()) &&
+        result.fields['طول اليوم'] != 'true' &&
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS)) {
+      await _offerCalendar(result);
+    }
+    return saved;
+  }
+
+  Future<void> _offerCalendar(Appointment item) async {
+    final add = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('إضافة لتقويم الموبايل'),
+        content: const Text(
+          'اختار التنبيه قبل القداس في تقويم الموبايل، وبعدها احفظ الحدث.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('لاحقًا'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('فتح التقويم'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || add != true) return;
+    final start = item.when;
+    final endMinute = int.tryParse(item.fields['وقت النهاية'] ?? '');
+    final end = endMinute == null
+        ? start.add(const Duration(hours: 1))
+        : DateTime(
+            start.year,
+            start.month,
+            start.day,
+            endMinute ~/ 60,
+            endMinute % 60,
+          );
+    try {
+      await const MethodChannel(
+        'shepherd/calendar',
+      ).invokeMethod<void>('addEvent', {
+        'title': item.sundaySlot?.label ?? 'قداس',
+        'location': item.title,
+        'start': start.millisecondsSinceEpoch,
+        'end': end.millisecondsSinceEpoch,
+      });
+    } on PlatformException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('القداس اتحفظ في التطبيق. تعذّر فتح تقويم الموبايل.'),
+          ),
+        );
+      }
+    }
   }
 
   Future<int?> _saveImported(List<LiturgySuggestion> drafts) async {

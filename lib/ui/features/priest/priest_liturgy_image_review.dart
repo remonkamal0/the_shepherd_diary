@@ -1,3 +1,4 @@
+import 'package:image_picker/image_picker.dart';
 import '../../../domain/appointments/reference_liturgy_schedule.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -77,24 +78,34 @@ class _LiturgyImageReviewState extends State<LiturgyImageReview> {
     }
   }
 
-  Future<void> _pick() async {
+  bool get _supportsCamera =>
+      kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+
+  Future<void> _pick({bool camera = false}) async {
+    if (_picking || _saving) return;
     setState(() => _picking = true);
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        withData: true,
-      );
-      if (mounted && result != null) {
-        final bytes = result.files.single.bytes;
+      final Uint8List? bytes;
+      if (camera) {
+        final photo = await ImagePicker().pickImage(source: ImageSource.camera);
+        bytes = await photo?.readAsBytes();
+      } else {
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.image,
+          withData: true,
+        );
+        bytes = result?.files.single.bytes;
+      }
+      if (mounted && bytes != null) {
         setState(() {
           _image = bytes;
           _dates = [];
           _saved.clear();
           _status = null;
         });
-        final reference = bytes == null
-            ? null
-            : readReferenceSchedule(bytes, widget.priestName);
+        final reference = readReferenceSchedule(bytes, widget.priestName);
         if (reference != null) {
           setState(() {
             _dates = reference;
@@ -102,11 +113,9 @@ class _LiturgyImageReviewState extends State<LiturgyImageReview> {
                 ? 'اختار ملف القس عشان تظهر قداساته.'
                 : null;
           });
-        } else if (bytes != null &&
-            !kIsWeb &&
-            defaultTargetPlatform == TargetPlatform.android) {
+        } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
           await _read(bytes);
-        } else if (bytes != null) {
+        } else {
           setState(
             () => _status = 'القراءة التلقائية للصور الأخرى متاحة على أندرويد.',
           );
@@ -143,6 +152,14 @@ class _LiturgyImageReviewState extends State<LiturgyImageReview> {
                     image == null ? 'اختيار صورة الجدول' : 'تغيير الصورة',
                   ),
                 ),
+                if (_supportsCamera)
+                  OutlinedButton.icon(
+                    onPressed: _picking || _saving
+                        ? null
+                        : () => _pick(camera: true),
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    label: const Text('تصوير الجدول'),
+                  ),
                 const SizedBox(height: 12),
                 Expanded(
                   child: image == null
